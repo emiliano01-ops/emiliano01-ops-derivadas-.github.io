@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora de Derivadas</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 8px; 
+            background: #f0f2f5; 
+            font-size: 14px;
+        }
+     .container { 
+            background: white; 
+            padding: 12px; 
+            border-radius: 8px; 
+            max-width: 100%;
+        }
+        h1 { 
+            text-align: center; 
+            color: #1a73e8; 
+            font-size: 1.1rem; 
+            margin: 0 0 12px 0;
+        }
+     .fila { 
+            display: flex; 
+            gap: 3px; 
+            margin-bottom: 5px; 
+            align-items: center;
+        }
+     .fila span { 
+            min-width: 65px; 
+            font-size: 12px; 
+            color: #333;
+        }
+        input { 
+            width: 100%; 
+            padding: 6px 2px; 
+            font-size: 14px; 
+            text-align: center; 
+            border: 1px solid #dadce0; 
+            border-radius: 4px;
+        }
+        input:focus { 
+            border-color: #1a73e8; 
+            outline: none; 
+        }
+        button { 
+            background: #1a73e8; 
+            color: white; 
+            border: none; 
+            padding: 10px; 
+            font-size: 15px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            width: 100%; 
+            margin: 6px 0; 
+        }
+        button:active { background: #1557b0; }
+     .btn-sec { background: #5f6368; }
+     .paso { 
+            background: #f8f9fa; 
+            padding: 6px; 
+            margin: 6px 0; 
+            border-radius: 4px; 
+            border-left: 3px solid #1a73e8; 
+            font-size: 11px;
+            line-height: 1.5;
+        }
+     .expresion { 
+            font-family: monospace; 
+            font-size: 13px; 
+            font-weight: bold;
+            overflow-x: auto;
+            white-space: pre;
+        }
+     .resultado { 
+            background: #34a853; 
+            color: white; 
+            padding: 10px; 
+            border-radius: 4px; 
+            text-align: center; 
+            font-weight: bold;
+            margin-top: 8px;
+            font-size: 15px;
+        }
+     .error { 
+            background: #ea4335; 
+            color: white; 
+            padding: 10px; 
+            border-radius: 4px; 
+            margin-top: 8px;
+        }
+       .ejemplos {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Calculadora de Derivadas</h1>
+        <div class="ejemplos">
+            Ejemplos: 3x^4 - 5x^2 + 7x - 9 | 2x^3 + 4 | 5x^(-2) + 3x
+        </div>
+        
+        <div class="fila">
+            <span>Función:</span>
+            <input type="text" id="funcion" placeholder="Ej: 3x^4 - 5x^2 + 7x - 9" value="3x^4 - 5x^2 + 7x - 9">
+        </div>
+        
+        <button onclick="resolverDerivada()">Calcular Derivada</button>
+        <button onclick="limpiar()" class="btn-sec">Limpiar</button>
+        
+        <div id="proceso"></div>
+        <div id="resultado"></div>
+    </div>
+
+    <script>
+        // Clase para manejar fracciones (igual que tu código original)
+        class Frac {
+            constructor(n, d = 1) {
+                if(typeof n === 'string') {
+                    n = n.trim();
+                    if(n.includes('/')) {
+                        let p = n.split('/');
+                        n = parseFloat(p[0]);
+                        d = parseFloat(p[1]);
+                    } else {
+                        n = parseFloat(n);
+                    }
+                }
+                if(d === 0) throw new Error("División por cero");
+                if(isNaN(n) || isNaN(d)) { n = 0; d = 1; }
+                
+                let g = this.mcd(Math.abs(n), Math.abs(d));
+                this.n = Math.round(n / g) * (d < 0? -1 : 1);
+                this.d = Math.round(Math.abs(d) / g);
+            }
+            
+            mcd(a, b) { return b? this.mcd(b, a % b) : a; }
+            
+            toString() {
+                if(this.d === 1) return this.n.toString();
+                if(this.n === 0) return "0";
+                return this.n + "/" + this.d;
+            }
+            
+            suma(o) { return new Frac(this.n * o.d + o.n * this.d, this.d * o.d); }
+            resta(o) { return new Frac(this.n * o.d - o.n * this.d, this.d * o.d); }
+            mult(o) { return new Frac(this.n * o.n, this.d * o.d); }
+            div(o) { return new Frac(this.n * o.d, this.d * o.n); }
+            esCero() { return this.n === 0; }
+            val() { return this.n / this.d; }
+        }
+
+        // Función para procesar cada término de la función
+        function procesarTermino(termino) {
+            let coef = new Frac(1);
+            let exp = new Frac(1);
+            let esConstante = false;
+
+            // Caso: término solo número (constante)
+            if(!termino.includes('x')) {
+                esConstante = true;
+                coef = new Frac(termino);
+                return { coef, exp, esConstante, derivada: new Frac(0), textoDerivada: "0" };
+            }
+
+            // Separar coeficiente y parte variable
+            let partes = termino.split('x');
+            let parteCoef = partes[0];
+            let parteExp = partes[1] || '';
+
+            // Obtener coeficiente
+            if(parteCoef === '' || parteCoef === '+') coef = new Frac(1);
+            else if(parteCoef === '-') coef = new Frac(-1);
+            else coef = new Frac(parteCoef);
+
+            // Obtener exponente
+            if(parteExp === '' || parteExp === '^1') exp = new Frac(1);
+            else if(parteExp === '^0') exp = new Frac(0);
+            else if(parteExp.startsWith('^')) exp = new Frac(parteExp.slice(1));
+            else exp = new Frac(parteExp); // por si viene sin ^
+
+            // Regla de la potencia: d/dx (a*x^n) = a*n * x^(n-1)
+            let nuevoCoef = coef.mult(exp);
+            let nuevoExp = exp.resta(new Frac(1));
+            let textoDerivada;
+
+            if(nuevoCoef.esCero()) {
+                textoDerivada = "0";
+            } else if(nuevoExp.val() === 0) {
+                textoDerivada = nuevoCoef.toString();
+            } else if(nuevoExp.val() === 1) {
+                textoDerivada = `${nuevoCoef.toString()}x`;
+            } else {
+                textoDerivada = `${nuevoCoef.toString()}x^${nuevoExp.toString()}`;
+            }
+
+            return {
+                coef, exp, esConstante,
+                derivada: nuevoCoef,
+                nuevoExp,
+                textoOriginal: termino,
+                textoDerivada
+            };
+        }
+
+        function resolverDerivada() {
+            try {
+                let funcion = document.getElementById('funcion').value.trim();
+                if(!funcion) throw new Error("Ingresa una función");
+
+                let proceso = document.getElementById('proceso');
+                let resultado = document.getElementById('resultado');
+                proceso.innerHTML = "";
+                resultado.innerHTML = "";
+
+                // Limpiar espacios y arreglar signos
+                funcion = funcion.replace(/\s+/g, '');
+                funcion = funcion.replace(/(?<!^)-/g, '+-');
+                let terminos = funcion.split('+').filter(t => t!== '');
+
+                // Paso 1: Mostrar función original
+                proceso.innerHTML += `
+                    <div class="paso">
+                        <b>Paso 1: Función original</b>
+                        <div class="expresion">f(x) = ${funcion.replace(/\+/g,'+ ')}</div>
+                    </div>`;
+
+                // Paso 2: Aplicar regla término a término
+                proceso.innerHTML += `
+                    <div class="paso">
+                        <b>Paso 2: Aplicar regla de la potencia [d/dx (a·xⁿ) = a·n · xⁿ⁻¹]</b>
+                `;
+
+                let partesDerivada = [];
+                terminos.forEach(ter => {
+                    let t = procesarTermino(ter);
+                    let explicacion;
+
+                    if(t.esConstante) {
+                        explicacion = `• ${t.textoOriginal} → Es constante, derivada = 0`;
+                    } else {
+                        explicacion = `• ${t.textoOriginal} → ${t.coef.toString()}·${t.exp.toString()} · x^(${t.exp.toString()}-1) = ${t.textoDerivada}`;
+                    }
+
+                    proceso.innerHTML += `<div style="margin:2px 0">${explicacion}</div>`;
+                    if(t.textoDerivada!== "0") partesDerivada.push(t.textoDerivada);
+                });
+
+                proceso.innerHTML += `</div>`;
+
+                // Paso 3: Simplificar resultado
+                let derivadaFinal = partesDerivada.join(' + ').replace(/\+ -/g, '- ');
+                if(derivadaFinal === "") derivadaFinal = "0";
+
+                // Mostrar resultado final
+                resultado.innerHTML = `
+                    f'(x) = ${derivadaFinal}
+                `;
+
+            } catch(e) {
+                document.getElementById('resultado').innerHTML = `<div class="error">Error: ${e.message}</div>`;
+            }
+        }
+
+        function limpiar() {
+            document.getElementById('funcion').value = '';
+            document.getElementById('proceso').innerHTML = '';
+            document.getElementById('resultado').innerHTML = '';
+        }
+
+        window.onload = resolverDerivada;
+    </script>
+</body>
+</html>
